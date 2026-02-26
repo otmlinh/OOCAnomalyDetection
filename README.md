@@ -1,0 +1,1 @@
+This is the source code for a model that detects out-of-context anomalies in still images. The model combines I-JEPA, a multi-layer perceptron, and a masked R-CNN. The model was trained on the COCO/train2014 dataset. Testing was performed on two datasets: COCO/val2014 and COCO-OOC.
