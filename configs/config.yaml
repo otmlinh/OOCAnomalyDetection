@@ -1,0 +1,112 @@
+#CHAY2.txt
+project:
+  name: "ex6_0320"   
+  out_dir: "runs"
+  ckpt_dir: checkpoints
+  seed: 42
+
+paths:
+  coco_root: "coco"
+
+  # COCO 2014
+  train_images: "coco/train2014"
+  val_images: "coco/val2014"
+  test_images: "coco/test2014"   # optional (để rõ ràng)
+  instances_train: "coco/annotations_trainval2014/instances_train2014.json"
+  instances_val: "coco/annotations_trainval2014/instances_val2014.json"
+
+  # NORMAL images: glob trực tiếp từ 2 thư mục
+  normal_dirs:
+    - "coco/val2014"
+    - "coco/test2014"
+
+  # ABNORMAL images: glob trực tiếp từ folder ảnh coco-ooc
+  ooc_images: "coco/coco_ooc/images"
+
+  # COCO-OOC (built on COCO 2014)
+  ooc_images: "coco/coco_ooc/images"
+  ooc_ann_dir: "coco/coco_ooc/annotations"
+
+hf:
+  model_id: "facebook/ijepa_vith14_1k"
+  attn_implementation: "sdpa"
+
+runtime:
+  device: "cuda"
+  amp: true
+  amp_dtype: "bf16"
+  num_workers: 2
+  pin_memory: true
+
+image:
+  size: 224
+  max_boxes_per_image: 10
+  min_crop_size: 16
+
+ssl:
+  epochs: 1
+  batch_size: 2
+  grad_accum: 8
+  lr: 1.0e-4
+  weight_decay: 0.05
+  ema_momentum: 0.996
+  mask_ratio: 0.6
+  train_last_n_blocks: 2
+  gradient_checkpointing: false
+  save_every_steps: 1000
+
+detector:
+  # IMPORTANT: paste-based negatives to match COCO-OOC generation
+  neg_mode: "paste"                 # "paste" or "swap"
+  neg_variant: "hybrid"
+  hybrid_probs: [0.50, 0.25, 0.25]  # Tương ứng [Ngữ cảnh, Kích thước, Vị trí]
+  paste_max_tries: 30
+  paste_jitter: 0.05
+  paste_prob_keep_bg_obj: 0.5
+  # --- Cấu hình OOC ---
+  scale_small_range: [0.2, 0.5]
+  scale_large_range: [1.5, 3.0]
+  scale_prob_small: 0.1   # <--- (10% nhỏ, 90% to)
+
+  epochs: 30
+  batch_size: 32
+  grad_accum: 4
+  head_lr: 0.0003 ## Tương đương 3e-4 #0.0001 #2.0e-4
+  backbone_lr: 0 #0.00001 #1.0e-5
+  weight_decay: 0.01
+  freeze_backbone: true #false
+  unfreeze_last_n_blocks: 0 #2
+  clip_grad_norm: 1.0
+  pairs_per_image: 2
+  neg_ratio: 1
+  head_hidden: 512
+  dropout: 0.1
+  gradient_checkpointing: false
+  num_heads: 8         # Cho Cross-Attention
+
+eval:
+  max_ooc_images: -1   
+  max_normal_images: -1
+  balanced_trials: 5
+  score_mode: topk_mean
+  topk: 3
+  ckpt_dir: "runs/checkpoints"
+  use_sigmoid_neg_logit: false
+
+eval_object:
+  mode: pred            # oracle | pred | both
+  include_normal: true  #: include COCO val objects as negatives
+  max_ooc_images: -1  #106036
+  max_normal_images: -1  # <-- thêm dòng này
+  normal_shuffle: true        # <-- thêm dòng này (optional)
+  ckpt_dir: "runs/checkpoints"
+
+  # pred boxes (the trick)
+  detector: maskrcnn_resnet50_fpn        # or fasterrcnn_resnet50_fpn
+  det_conf: 0.02 # 0.05 #tăng recall (test 1000: 0.474)                        # LOW -> higher recall #RẤT QUAN TRỌNG: thấp để tăng recall
+  topn: 500 #500  #tăng recall (test 1000 (topn=100) thi: 0.474)                            # HIGH -> higher recall
+  iou_thr: 0.3 #0.50 #tăng recall (test 1000: 0.474)
+
+  miss_mode: conservative                # conservative | ignore # nếu detector miss OOC box
+  det_cache_dir: ""                      # empty -> default <run_dir>/det_cache
+  use_cache: true
